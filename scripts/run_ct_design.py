@@ -22,10 +22,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ctdesign import spec as specmod                                  # noqa: E402
-from ctdesign import thermal_design, plots                            # noqa: E402
+import pandas as pd
+
+from ctdesign import thermal_design, plots, sizing, report            # noqa: E402
 
 STAGES = ["basis", "thermal", "size", "structure", "drawings", "model", "report"]
-IMPLEMENTED = {"basis", "thermal"}
+IMPLEMENTED = {"basis", "thermal", "size", "report"}
 
 
 def _jsonable(o):
@@ -81,6 +83,65 @@ def stage_thermal(b: specmod.Basis, out: Path) -> dict:
     return t
 
 
+def stage_size(b: specmod.Basis, out: Path, quick: bool, params: str | None) -> dict:
+    cand = out / "data" / "candidates.csv.gz"
+    df = sizing.optimise(b, quick)
+    df.to_csv(cand, index=False)
+    print(f"[size] {len(df):,} candidates, {int(df.feasible.sum()):,} feasible")
+    if params:
+        p = json.loads(params)
+    else:
+        best = sizing.select(df)
+        if best is None:
+            msg = df.violations.str.split("; ").explode().value_counts().head(8).to_string()
+            print("[size] NO FEASIBLE DESIGN. Most common rejection reasons:\n" + msg)
+            print("Relax the binding limits or widen the grid, and rerun.")
+            sys.exit(2)
+        p = {k: best[k].item() if hasattr(best[k], "item") else best[k] for k in sizing.PARAM_KEYS}
+    d = sizing.finalize(b, p)
+    d["candidates"] = df
+    t, g, fn = d["thermal"], d["geom"], d["fan"]
+    plots.demand_supply(t, out / "plots" / "01_demand_supply.svg")
+    plots.performance(t, out / "plots" / "02_performance_curves.svg")
+    plots.poppe_profile(t, b.P_atm, out / "plots" / "03_poppe_profile.svg")
+    plots.pressure_breakdown(d, out / "plots" / "04_pressure_breakdown.svg")
+    if df.feasible.any():
+        sel = df[(df[sizing.PARAM_KEYS] == pd.Series(p)).all(axis=1)]
+        plots.optimisation(df, sel.iloc[0] if len(sel) else sizing.select(df), out / "plots" / "05_optimisation.svg")
+    res = {k: d[k] for k in ("params", "summary", "air", "fan", "hyd", "cost", "water_balance", "basin",
+                             "warnings", "violations")}
+    res.update(geometry=g.to_dict(), thermal={"selected": t["selected"], "ratings": t["ratings"],
+                                              "performance": t["performance"], "design_check": t["design_check"]},
+               basis={"V_w_m3_h": b.V_w, "T_hot": b.T_hot, "T_cold": b.T_cold, "T_wb": b.T_wb, "Q_W": b.Q,
+                      "P_atm": b.P_atm})
+    (out / "data" / "design_results.json").write_text(json.dumps(_jsonable(res), indent=2), encoding="utf-8")
+    print(f"[size] {g.cells} cells x {g.L} x {g.W} m, fill {g.depth} m, inlet {g.H_inlet} m, height {g.z['stack_top']:.2f} m, "
+          f"L/G {t['selected']['LG']:.3f}")
+    print(f"[size] fans {g.cells} x {fn['D']} m, {fn['motor_kW']} kW, static {fn['dP_fan_static']:.0f} Pa; pump head "
+          f"{d['hyd']['pump_head_m']:.2f} m; makeup {d['water_balance']['makeup_m3_h']:.1f} m3/h; "
+          f"capex {d['cost']['capex_total']:,.0f}, TPC {d['cost']['total_present_cost']:,.0f}; "
+          f"violations {d['violations'] or 'none'}")
+    return d
+
+
+def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
+    if d is None:                                         # report-only run: rebuild from the saved selection
+        res = json.loads((out / "data" / "design_results.json").read_text(encoding="utf-8"))
+        d = sizing.finalize(b, res["params"])
+        cand = out / "data" / "candidates.csv.gz"
+        d["candidates"] = pd.read_csv(cand) if cand.exists() else pd.DataFrame()
+    tag = b.spec["project"]["tag"]
+    files = {"REPORT.md": "Technical design report", "DATASHEET.md": "CTI-style datasheet",
+             f"data/{tag}_datasheet.xlsx": "Datasheet (Excel)", "data/design_results.json": "Every computed value",
+             "data/candidates.csv.gz": "All optimiser candidates with rejection reasons",
+             "plots/01_demand_supply.svg": "Demand vs tower characteristic", "plots/02_performance_curves.svg": "Performance curves",
+             "plots/03_poppe_profile.svg": "Poppe profile and air path", "plots/04_pressure_breakdown.svg": "Air-side losses",
+             "plots/05_optimisation.svg": "Optimisation trade-off"}
+    report.write_datasheet(d, b, out / "DATASHEET.md", out / "data" / f"{tag}_datasheet.xlsx")
+    report.write_report(d, b, d["candidates"], out / "REPORT.md", files)
+    print(f"[report] {out.resolve() / 'REPORT.md'}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("spec")
@@ -96,14 +157,19 @@ def main(argv=None):
     b = specmod.load(a.spec)
     (out / "data" / "spec_used.json").write_text(json.dumps(b.spec, indent=2), encoding="utf-8")
 
+    d = None
     for st in (STAGES if a.stage == "all" else [a.stage]):
         if st not in IMPLEMENTED:
             print(f"[{st}] not implemented yet")
             continue
         if st == "basis":
             stage_basis(b, out)
-        elif st == "thermal":
+        elif st == "thermal" and a.stage == "thermal":      # `all` gets the thermal design from `size`
             stage_thermal(b, out)
+        elif st == "size":
+            d = stage_size(b, out, a.quick, a.params)
+        elif st == "report":
+            stage_report(b, out, d)
 
 
 if __name__ == "__main__":

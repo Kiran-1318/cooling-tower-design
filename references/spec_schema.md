@@ -42,6 +42,59 @@ Leave a field as `null` and the optimiser chooses it from `grid`. Give a value a
 | `basin` | `concrete` | `concrete` (civil works by others) or `frp` |
 | `basin_depth_m` | null | |
 
+More `tower` fields:
+
+| field | default | notes |
+|---|---|---|
+| `inlet_louvers` | false | rain-trap louvers; when true, `airside.K_louver` is added at the inlet |
+| `nozzle_pitch_m` | 1.2 | pitch of the square nozzle grid |
+| `nozzle_clearance_m` | 0.6 | distance from the nozzle orifice to the top of the fill |
+
+## airside (GENERIC loss coefficients)
+Each K multiplies the velocity pressure ρv²/2 at the stated local velocity.
+
+| field | default | velocity it applies to |
+|---|---|---|
+| `K_inlet` | 1.5 | inlet face |
+| `K_louver` | 1.0 | inlet face, added only with louvers |
+| `K_rain_per_m` | 1.2 | fill face, multiplied by the rain-zone height |
+| `K_fill_support` | 0.5 | fill face |
+| `K_spray` | 1.0 | plan velocity at exit density |
+| `K_eliminator` | `{cellular: 2.5, blade: 4.0}` | plan velocity at exit density |
+| `K_plenum` | 0.3 | fan annulus |
+
+Two more fields shape the velocity-recovery stack:
+- `stack_diffuser_eff` (0.65): its static regain.
+- `stack_half_angle_deg` (7): its cone half-angle.
+
+Replace any of these with vendor data when you have it.
+
+## fan
+| field | default | notes |
+|---|---|---|
+| `total_efficiency` | 0.75 | GENERIC |
+| `gear_efficiency` | 0.95 | |
+| `motor_efficiency` | 0.94 | |
+| `motor_margin` | 1.10 | motor rating ≥ margin × the absorbed power at design |
+| `hub_ratio` | 0.2 | |
+| `tip_speed_design_m_s` | 55 | |
+| `fan_velocity_m_s` | [6, 12] | allowed velocity through the fan annulus |
+| `min_cover` | 0.55 | fan diameter ≥ min_cover × the shorter cell side |
+| `tip_clearance_m` | 0.3 | cell side ≥ D + 2 × clearance |
+
+## water_system
+| field | default | notes |
+|---|---|---|
+| `pumps_duty`, `pumps_standby` | 2, 1 | |
+| `header_velocity_max_m_s` | 2.4 | |
+| `lateral_velocity_max_m_s` | 1.8 | |
+| `riser_velocity_max_m_s` | 2.5 | |
+| `pipe_roughness_mm` | 0.05 | |
+| `nozzle_Cd` | 0.85 | |
+| `basin_min_water_depth_m` | 1.0 | |
+| `basin_freeboard_min_m` | 0.3 | |
+| `drain_time_h` | 4 | |
+
 ## limits
 | field | default |
 |---|---|
@@ -55,6 +108,10 @@ Leave a field as `null` and the optimiser chooses it from `grid`. Give a value a
 | `nozzle_pressure_kPa` | [20, 70] |
 | `thermal_capability_min_pct` | 100 |
 | `basin_retention_min` | 5 |
+| `inlet_aspect_max` | 3.0 |
+| `inlet_height_min_m` | 1.5 |
+
+`inlet_aspect_max` caps the ratio of air travel (W/2, the distance from the inlet face to the cell centre) to inlet height.
 
 ## water
 - `cycles_of_concentration` (default 4)
@@ -85,6 +142,8 @@ Leave a field as `null` and the optimiser chooses it from `grid`. Give a value a
 These rates drive the optimiser objective: capital cost plus the present value of fan and pump energy.
 - Capital rates: `frp_per_kg`, `fill_per_m3`, `eliminator_per_m2`, `casing_per_m2`, `fan_set_per_kW`, `fixed_per_cell`, `basin_per_m2`.
 - Energy and finance: `electricity_per_kWh`, `hours_per_year`, `years`, `rate`, `pump_efficiency`.
+
+There is one more cost field: `frp_kg_per_m3` (default 9). It estimates the FRP framing weight per m³ of cell envelope, and Phase 3 replaces it with the framed structure.
 
 ## grid
 The optimiser's search space: `cells`, `cell_plan_m` (a list of `[L, W]` pairs), `fill_depth_m` and `fan_diameter_m`.

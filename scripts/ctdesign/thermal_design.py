@@ -31,10 +31,23 @@ def plume_visible(air_out: dict, air_amb: dict, P: float, n: int = 50) -> bool:
     return bool(np.any(W[1:-1] > ps.W_sat(T[1:-1], P)))
 
 
-def design_point(b: Basis, depth: float, lib: dict | None = None) -> dict:
+def merkel_exit_air(h_out: float, P: float) -> dict:
+    """Merkel exit air: saturated at the exit enthalpy (used for fast screening)."""
+    lo, hi = -10.0, 80.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if ps.h_sat(mid, P) < h_out else (lo, mid)
+    T = 0.5 * (lo + hi)
+    return {"T": T, "W": float(ps.W_sat(T, P))}
+
+
+def design_point(b: Basis, depth: float, lib: dict | None = None, H_rain: float | None = None,
+                 poppe: bool = True) -> dict:
     s, P = b.spec, b.P_atm
     cpw = b.cp_w
-    H_rain, h_note = rain_zone_height(s["tower"])
+    h_note = None
+    if H_rain is None:
+        H_rain, h_note = rain_zone_height(s["tower"])
     ch = characteristic(s["tower"], depth, H_rain, lib)
     air = ps.air_state(b.T_db, b.T_wb, P)
     lg_int = th.operating_LG(b.T_hot, b.T_cold, air["h"], P, ch, cpw)
@@ -43,6 +56,11 @@ def design_point(b: Basis, depth: float, lib: dict | None = None) -> dict:
     cap = s["limits"]["thermal_capability_min_pct"] / 100.0
     LG = lg_int / cap
     G = b.m_w / LG                                                    # kg/s dry air
+    if not poppe:
+        ex = merkel_exit_air(air["h"] + LG * cpw * b.range, P)
+        return {"depth": depth, "feasible": True, "H_rain": H_rain, "LG": LG, "G_dry_kg_s": G,
+                "T_air_out": ex["T"], "W_out": ex["W"], "air_in": air, "_char": ch,
+                "warnings": ch.check(LG, b.T_hot)}
     pp = th.poppe(b.T_hot, b.T_cold, LG, air, P, cpw)
     out_air = {"T": pp["T_air_out"], "W": pp["W_out"]}
     warnings = ch.check(LG, b.T_hot) + ([h_note] if h_note else [])
@@ -72,6 +90,12 @@ def run(b: Basis) -> dict:
     # replaces this with the cost optimiser over depth, plan area and fan.
     inside = [p for p in ok if not any("outside the" in w and "fill data" in w for w in p["warnings"])]
     sel = (inside or ok)[0] if not s["tower"]["fill_depth_m"] else ok[0]
+    return {"feasible": True, "points": pts, "selected": sel, **curves(b, sel)}
+
+
+def curves(b: Basis, sel: dict) -> dict:
+    """Demand family, ratings and performance curves around a selected design point."""
+    s = b.spec
     ch, air, P = sel["_char"], sel["air_in"], b.P_atm
 
     LGd, Med = th.demand_curve(b.T_hot, b.T_cold, air["h"], P, cpw=b.cp_w)
@@ -95,6 +119,6 @@ def run(b: Basis) -> dict:
     wb_list = list(np.arange(round(b.T_wb) - 8, round(b.T_wb) + 4.01, 1.0))
     perf = th.performance_curves(ch, sel["LG"], b.range, air, P, wb_list, cpw=b.cp_w)
     design_check = th.rate(ch, sel["LG"], air, P, range_C=b.range, cpw=b.cp_w)
-    return {"feasible": True, "points": pts, "selected": sel, "demand": {"LG": LGd, "Me": Med},
+    return {"demand": {"LG": LGd, "Me": Med},
             "demand_family": family, "LG_max": th.LG_max(b.T_hot, b.T_cold, air["h"], P, b.cp_w),
             "ratings": ratings, "performance": perf, "design_check": design_check}

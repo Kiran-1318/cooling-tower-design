@@ -51,6 +51,35 @@ def performance(t: dict, path):
     _save(fig, path)
 
 
+def pressure_breakdown(d: dict, path):
+    rows = d["air"]["rows"]
+    fn = d["fan"]
+    names = [r["item"] for r in rows] + ["buoyancy credit", "stack loss", "exit velocity pressure"]
+    vals = [r["dP"] for r in rows] + [-d["air"]["buoyancy_credit"], fn["dP_stack"], fn["vp_exit"]]
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.barh(names[::-1], vals[::-1], color=["#c44" if v < 0 else "#47a" for v in vals[::-1]])
+    for i, v in enumerate(vals[::-1]):
+        ax.text(v, i, f" {v:.1f}", va="center", fontsize=7)
+    ax.set_xlabel("Pa")
+    ax.set_title(f"Fan total pressure {fn['dP_total']:.0f} Pa (static {fn['dP_fan_static']:.0f} Pa)")
+    _save(fig, path)
+
+
+def optimisation(df, sel, path):
+    ok = df[df.feasible.astype(bool)]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4))
+    sc = a1.scatter(ok.capex / 1e3, ok.energy_kW, c=ok.TPC / 1e6, cmap="viridis", s=14)
+    a1.plot(sel.capex / 1e3, sel.energy_kW, "r*", ms=14, label="selected")
+    a1.set_xlabel("capital cost (k)"); a1.set_ylabel("fan + pump power (kW)"); a1.legend()
+    fig.colorbar(sc, ax=a1, label="total present cost (M)")
+    for depth, g in ok.groupby("depth"):
+        best = g.groupby("cells").TPC.min()
+        a2.plot(best.index, best.values / 1e6, "o-", label=f"fill {depth} m")
+    a2.set_xlabel("cells"); a2.set_ylabel("best total present cost (M)"); a2.legend(fontsize=7)
+    a1.set_title("Feasible candidates"); a2.set_title("Cost vs number of cells")
+    _save(fig, path)
+
+
 def poppe_profile(t: dict, P: float, path):
     pr = t["selected"]["_poppe_profile"]                 # Tw, w, ima, Me, Ta, sat, Lef
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 4))

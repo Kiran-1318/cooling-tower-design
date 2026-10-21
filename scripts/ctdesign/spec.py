@@ -56,6 +56,40 @@ DEFAULT_SPEC = {
         "power_supply": "415V/3ph/50Hz",
         "basin": "concrete",               # "concrete" (civil by others) | "frp"
         "basin_depth_m": None,
+        "inlet_louvers": False,            # rain-trap louvers on the air inlets
+        "nozzle_pitch_m": 1.2,             # square nozzle grid
+        "nozzle_clearance_m": 0.6,         # nozzle orifice to fill top
+    },
+    "airside": {                           # GENERIC loss coefficients, K referred to the local velocity pressure
+        "K_inlet": 1.5,                    # entry + turn into the fill (inlet face velocity)
+        "K_louver": 1.0,                   # added when tower.inlet_louvers (inlet face velocity)
+        "K_rain_per_m": 1.2,               # rain zone, per m of height (fill face velocity)
+        "K_fill_support": 0.5,
+        "K_spray": 1.0,                    # spray zone + header/lateral blockage
+        "K_eliminator": {"cellular": 2.5, "blade": 4.0},
+        "K_plenum": 0.3,                   # plenum + fan inlet (fan annulus velocity)
+        "stack_diffuser_eff": 0.65,        # static regain of a velocity-recovery stack
+        "stack_half_angle_deg": 7.0,
+    },
+    "fan": {
+        "total_efficiency": 0.75,          # GENERIC axial CT fan, total-to-total at duty
+        "gear_efficiency": 0.95,
+        "motor_efficiency": 0.94,
+        "motor_margin": 1.10,              # motor rating >= margin x absorbed power at design
+        "hub_ratio": 0.2,                  # seal disc / fan diameter
+        "tip_speed_design_m_s": 55.0,
+        "fan_velocity_m_s": [6.0, 12.0],   # through the fan annulus
+        "min_cover": 0.55,                 # fan diameter >= min_cover x shorter cell side
+        "tip_clearance_m": 0.3,            # cell side >= D + 2 x clearance
+    },
+    "water_system": {
+        "pumps_duty": 2, "pumps_standby": 1,
+        "header_velocity_max_m_s": 2.4, "lateral_velocity_max_m_s": 1.8, "riser_velocity_max_m_s": 2.5,
+        "pipe_roughness_mm": 0.05,         # FRP/HDPE
+        "nozzle_Cd": 0.85,
+        "basin_min_water_depth_m": 1.0,
+        "basin_freeboard_min_m": 0.3,
+        "drain_time_h": 4.0,
     },
     "limits": {
         "approach_min_C": 2.8,
@@ -68,6 +102,8 @@ DEFAULT_SPEC = {
         "nozzle_pressure_kPa": [20.0, 70.0],
         "thermal_capability_min_pct": 100.0,
         "basin_retention_min": 5.0,        # minutes of circulating flow held in the basin
+        "inlet_aspect_max": 3.0,           # air travel (W/2) / inlet height, for even air distribution
+        "inlet_height_min_m": 1.5,
     },
     "water": {
         "cycles_of_concentration": 4.0,
@@ -96,6 +132,7 @@ DEFAULT_SPEC = {
         "fan_set_per_kW": 600.0, "fixed_per_cell": 20000.0, "basin_per_m2": 250.0,
         "electricity_per_kWh": 0.12, "hours_per_year": 8000.0, "years": 15, "rate": 0.10,
         "pump_efficiency": 0.75,
+        "frp_kg_per_m3": 9.0,              # Phase-2 estimate of FRP framing per m3 of cell envelope (Phase 3 replaces)
     },
     "grid": {                              # optimiser search space (used only where tower.* is None)
         "cells": [1, 2, 3, 4, 6, 8],

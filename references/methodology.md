@@ -64,3 +64,98 @@ The tower characteristic is Me_tower(L/G) = Me_fill + Me_rain + Me_spray.
 - Performance curves (ATC-105 format): cold water against wet-bulb at 90/100/110 % flow and 80/100/120 % range.
   - Phase 1 holds the dry-air mass flow constant.
   - Phase 2 adds the fan-law and air-density corrections.
+
+## 6. Sizing and optimisation (`sizing.py`, `geometry.py`)
+
+### Candidates and screening
+- A candidate is a combination of: number of cells, cell length × width, fill depth, and fan diameter. Any of these that the spec fixes is held constant.
+- Screening uses the Merkel design point, with the exit air taken as saturated at the exit enthalpy. Thermal results are cached by (fill depth, rain-zone height).
+- The finalised design is re-solved with Poppe.
+
+### Air-inlet height
+The inlet height is the largest of three values, rounded up to 0.1 m:
+- the minimum inlet height
+- the air-travel rule: (W/2)/H ≤ `inlet_aspect_max` (with four-sided inlets, the travel is min(L, W)/2)
+- the inlet-velocity rule
+
+The inlet height, rain-zone height and L/G depend on each other, so they are iterated until consistent. This takes 2–3 passes.
+
+### Elevations
+All elevations are measured above the basin operating water level. Going up the tower:
+
+| Elevation | Rule |
+|---|---|
+| Curb | +0.3 m |
+| Air inlet | from the curb up by H_inlet |
+| Fill bottom | inlet top + 0.15 m for supports |
+| Fill top | fill bottom + fill depth |
+| Nozzle | fill top + `nozzle_clearance_m` |
+| Header centreline | nozzle + 0.15 m + D_header/2 |
+| Eliminator | header top + 0.3 m |
+| Fan deck | eliminator top + max(1.5 m, 0.4·D) |
+| Stack top | fan deck + stack height; a velocity-recovery stack is max(1.8 m, 0.5·D) tall with a 7° half-angle |
+
+### Constraints
+A candidate is rejected if it breaks any of these:
+- **Water loading:** inside both the spec limits and the fill's range.
+- **Air velocities:** fill face, inlet and eliminator velocities within their limits.
+- **Fan:**
+  - annulus velocity within the allowed range
+  - fits the cell with tip clearance
+  - covers at least `min_cover` of the shorter side
+  - static pressure and tip speed within limits
+- **Fill material:** within its temperature limit.
+- **Nozzle pressure:** within its range.
+
+### Objective
+Total present cost = capital cost + present value of the fan input power and the tower's share of pumping power.
+- **Capital** covers: FRP framing (estimated per m³ of envelope), fill, eliminators, casing and deck, fan sets (cost per motor kW), basin, and a fixed cost per cell.
+- **Energy:** valued over `years` at `rate`, using `hours_per_year`.
+- **Sensitivity:** with cheap capital or expensive energy, the optimum moves to low air velocities (bigger towers, small fans). The report says so when this happens.
+
+## 7. Air side and fan (`airside.py`, `fan.py`)
+
+### Losses
+Each loss is ΔP = K·ρv²/2 at its local velocity and density:
+- **inlet:** ambient density
+- **rain zone and fill:** the mean density in the fill
+- **spray, eliminator and plenum:** exit-air density
+
+A natural-draft credit, (ρ_in − ρ_out)·g·(z_stack_top − z_fill_top), is subtracted from the total.
+
+### Fan pressures
+- **Total pressure:** system static loss + stack loss + exit velocity pressure.
+- **Velocity-recovery stack:** loss = (1 − η_diffuser)·(vp_fan − vp_exit).
+- **Fan static pressure:** total pressure − velocity pressure in the annulus.
+
+### Power and drive
+- **Air power:** Q·ΔP_total. This equals Perry's eq. 12-13, SAHP = Q·hs·d/(33,000·12), which is tested.
+- **Shaft power:** air power / η_total.
+- **Motor:** the smallest IEC size ≥ margin × shaft power / η_gear.
+- **Fan speed:** set by the design tip speed. The gear ratio is motor rpm / fan rpm.
+
+### Plausibility
+With the generic loss set, fan static pressure scales from about 125–175 Pa at fill velocities of 2.5–3 m/s down to about 65–90 Pa at 2 m/s. This is consistent with typical counterflow film-fill towers.
+
+## 8. Water side (`hydraulics.py`, `basin.py`, `water_balance.py`)
+
+### Distribution
+- **Layout:** one riser per cell, outside the inlet face. A header runs across the cell (W), laterals branch both ways along L, and nozzles sit on a square grid.
+- **Nozzle orifice:** the largest standard orifice whose pressure drop stays at or above the minimum nozzle pressure. Flow follows q = Cd·A·√(2Δp/ρ).
+- **Pipe sizes:** the smallest DN that meets each velocity limit.
+- **Friction:** the Colebrook factor from `fluids`. The header and laterals are manifolds with uniform outflow, so they use 1/3 of the full-flow loss.
+- **Riser:** K = 2 elbows + valve + tee.
+- **Tower pump head:** lift to the nozzle + nozzle Δp + pipe losses. This matches Perry's eq. 12-14 for pump bhp, which is tested.
+
+### Basin
+- **Water depth:** holds the retention volume, never less than the minimum depth.
+- **Freeboard:** holds the drain-down volume: pipe volume, plus 0.03 m³ per m³ of fill, plus 5 s of water in flight.
+
+### Pump sump (ANSI/HI 9.8)
+- Bell velocity is 1.7 m/s.
+- Submergence: S = D·(1 + 2.3·Fr).
+- Floor clearance is 0.5·D.
+- A sump pit is called for when the sump floor falls below the basin floor.
+
+### Water balance
+Perry's eqs. 12-9 to 12-12, with blowdown corrected for drift (B = E/(C − 1) − D). Perry's uncorrected form is also reported as the conservative bound, and Perry's Example 13 is reproduced in the tests.
