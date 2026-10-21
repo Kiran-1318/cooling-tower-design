@@ -71,6 +71,44 @@ def write_datasheet(d: dict, b: Basis, md_path, xlsx_path):
     pd.DataFrame(rows, columns=["Section", "Item", "Value"]).to_excel(xlsx_path, index=False)
 
 
+def structure_section(d: dict, b: Basis) -> list[str]:
+    if "structure" not in d:
+        return ["## 7. FRP structure", "", "Not run - add the `structure` stage.", ""]
+    st, s = d["structure"], b.spec
+    mt, se, summ = st["material"], st["seismic"], d["bom_summary"]
+    L = ["## 7. FRP structure", "",
+         "Pultruded FRP frame per ASCE/SEI 74 'ordinary braced cooling tower' (R = Cd = Omega0 = 2): columns continuous from "
+         f"the basin floor to the fan deck, beams on every grid line at {len(st['grid']['tiers']) - 1} tiers, every column line "
+         f"diagonally braced. Grid {len(st['grid']['xs'])} x {len(st['grid']['zs'])} lines over the analysed block of "
+         f"{st['grid']['cells_modelled']} cell(s): {st['n_nodes']} nodes, {st['n_members']} members (PyNite 3D frame, linear, "
+         "per-case superposition).", "",
+         "Tiers: " + ", ".join(f"{n} {y:+.2f} m" for n, y in st["grid"]["tiers"]), "",
+         f"Material {mt['name']} ({mt['basis'].split(' - ')[0]}), end-use factors for a wet interior at "
+         f"{mt['T_service_C']:.0f} C: C = {mt['C_strength']:.3f} (strength), {mt['C_modulus']:.3f} (modulus); "
+         f"E_L {mt['E_L_GPa']:.1f} GPa, F_Lc {mt['F_Lc_MPa']:.0f} MPa.", "",
+         "Resistance factors: " + ", ".join(f"{k} {v} ({st['phi_source'][k]})" for k, v in st["phi"].items()) + ".", "",
+         f"Loads: wind V = {st['wind']['V_m_s']} m/s exposure {st['wind']['exposure']}, q at the fan deck {st['wind']['qz_deck_Pa']:.0f} Pa; "
+         f"seismic S_DS {se['SDS']:.3f}, S_D1 {se['SD1']:.3f} ({se['source']}), T {se['T']:.2f} s, Cs {se['Cs']:.3f}, "
+         f"W {se['W_kN']:.0f} kN, V {se['V_kN']:.0f} kN on the analysed block; fill hold-up {s['structure']['fill_hold_up_kg_m3']} kg/m3, "
+         f"deck live {s['structure']['fan_deck_live_kPa']} kPa, equipment {st['equipment_kg_per_cell']:.0f} kg + stack "
+         f"{st['stack_kg_per_cell']:.0f} kg per cell. LRFD combinations of ASCE 7 with the ASCE 74 time-effect factor lambda.", "",
+         _t([(g.replace("_", " "), v["section"], v["count"], f"{v['UR_max']:.2f}", v["governs"], v["combo"])
+             for g, v in st["groups"].items()], ["Group", "Section", "Members", "Max UR", "Governs", "Combination"]), "",
+         _t([(g.replace("_", " "), c["type"], f"{c['force_kN']:.1f}", f"{c['bolts']} x M{c['d_mm']}", f"{c['UR']:.2f}", c["governs"])
+             for g, c in st["connections"].items()], ["Connection", "Type", "Force kN", "Bolts", "UR", "Governs"]), "",
+         f"Serviceability: worst beam mid-span deflection {st['deflection']['mid_mm']:.1f} mm "
+         f"({100 * st['deflection']['ratio_to_limit']:.0f} % of {st['deflection']['limit']}); drift {st['drift']['mm']:.1f} mm "
+         f"(limit {st['drift']['limit_mm']:.0f} mm). ASCE 74 slenderness failures {st['slenderness_failures']}, serviceability "
+         f"compression failures {st['serviceability_failures']}. Base reactions per column: down {st['base_reactions']['max_down_kN']:.1f} kN, "
+         f"uplift {st['base_reactions']['max_uplift_kN']:.1f} kN, shear {st['base_reactions']['max_shear_kN']:.1f} kN.", "",
+         "![structure](plots/06_structure_utilisation.png)", "",
+         f"Bill of materials (whole tower): FRP framing {summ['frp_structure_kg'] / 1e3:.1f} t, connections "
+         f"{summ['connections_kg'] / 1e3:.1f} t, total listed {summ['total_kg'] / 1e3:.1f} t "
+         f"(Phase-2 volumetric estimate was {d['cost']['frp_kg_estimate'] / 1e3:.1f} t of FRP).", "",
+         _t([(k, f"{v / 1e3:,.1f}") for k, v in summ["by_category_kg"].items()], ["BOM category", "t"]), ""]
+    return L
+
+
 def findings(d: dict, b: Basis) -> list[str]:
     th, fn, wb, air = d["thermal"]["selected"], d["fan"], d["water_balance"], d["air"]
     f = []
@@ -94,6 +132,17 @@ def findings(d: dict, b: Basis) -> list[str]:
         f.append(f"Fan static pressure is modest ({fn['dP_fan_static']:.0f} Pa) because the air side uses GENERIC loss "
                  "coefficients and a low fill velocity; vendor fill/eliminator curves can raise it materially. "
                  f"The motor carries a {100 * (b.spec['fan']['motor_margin'] - 1):.0f} % margin.")
+    if "structure" in d:
+        st = d["structure"]
+        for v in st["violations"]:
+            f.append(f"**STRUCTURE VIOLATION**: {v}")
+        top = max(st["groups"].items(), key=lambda kv: kv[1]["UR_max"])
+        f.append(f"Structure: highest utilisation {top[1]['UR_max']:.2f} in the {top[0].replace('_', ' ')}s "
+                 f"({top[1]['governs']}, {top[1]['combo']}). Members governed by 1.4(D+F) are creep-rupture critical (lambda 0.4).")
+        if st["seismic"]["Cs"] >= 0.2:
+            f.append(f"Seismic Cs = {st['seismic']['Cs']:.3f} with R = 2 is high and drives the braces; confirm S_DS/S_D1 with the "
+                     "ASCE Hazard Tool and consider a testing-based reduction of the fill/water seismic weight (ASCE 74).")
+        f.append("FRP material values are GENERIC and several phi factors are ASSUMED - confirm with the selected pultruder and ASCE/SEI 74-23.")
     if d["basin"]["sump_pit"]:
         f.append(f"Pump suction needs a sump pit {d['basin']['sump_pit_depth_below_basin_m']:.2f} m below the basin floor (HI 9.8 submergence).")
     return f
@@ -164,8 +213,9 @@ def write_report(d: dict, b: Basis, df: pd.DataFrame, path, files: dict):
               ("Evaporation (Poppe)", f"{wb['evaporation_m3_h']:.1f} m3/h"),
               ("Drift", f"{wb['drift_m3_h']:.2f} m3/h"),
               ("Blowdown (drift-corrected / Perry)", f"{wb['blowdown_m3_h']:.1f} / {wb['blowdown_perry_m3_h']:.1f} m3/h"),
-              ("Makeup (drift-corrected / Perry)", f"{wb['makeup_m3_h']:.1f} / {wb['makeup_perry_m3_h']:.1f} m3/h")], ["Item", "Value"]), "",
-          "## 7. Optimisation", ""]
+              ("Makeup (drift-corrected / Perry)", f"{wb['makeup_m3_h']:.1f} / {wb['makeup_perry_m3_h']:.1f} m3/h")], ["Item", "Value"]), ""]
+    L += structure_section(d, b)
+    L += ["## 8. Optimisation", ""]
     if len(df):
         ok = df[df.feasible.astype(bool)].nsmallest(10, "TPC")
         L += [f"{len(df):,} candidates, {int(df.feasible.sum()):,} feasible. Ten cheapest:", "",
@@ -175,15 +225,21 @@ def write_report(d: dict, b: Basis, df: pd.DataFrame, path, files: dict):
               "Most common rejection reasons:", "",
               _t([(k, v) for k, v in df.violations[df.violations != ""].str.split("; ").explode().value_counts().head(8).items()],
                  ["Reason", "Candidates"]), "", "![optimisation](plots/05_optimisation.png)", ""]
-    L += ["Capital cost breakdown (estimate; FRP weight from a per-m3 factor until the Phase 3 structure):", "",
+    L += [("Capital cost breakdown (FRP structure from the BOM weight):" if "structure" in d else
+           "Capital cost breakdown (estimate; FRP weight from a per-m3 factor until the structure stage runs):"), "",
           _t([(k.replace("_", " "), f"{v:,.0f}") for k, v in d["cost"]["capex"].items()], ["Item", s["costs"]["currency"]]), "",
-          "## 8. Findings", ""] + [f"- {x}" for x in findings(d, b)] + ["",
-          "## 9. Limitations", "",
+          "## 9. Findings", ""] + [f"- {x}" for x in findings(d, b)] + ["",
+          "## 10. Limitations", "",
           "- Film-fill coefficients, all air-side loss coefficients except the fill, and the fan efficiency are GENERIC. "
           "Use vendor fill, eliminator and fan curves before purchase (spec `tower.fill_override`, `airside`, `fan`).",
           "- The rain-zone correlation is a measured test-cell fit (Vitkovic & Dvorak 2016) and is extrapolated outside H 1.45-3.03 m, L/G 1.0-2.0.",
           "- Ratings and performance curves hold the dry-air mass flow constant; fan-law/density corrections are not yet applied.",
-          "- FRP structure weight and cost are a volumetric estimate; Phase 3 replaces them with the framed structure and BOM.",
+          *(["- FRP structure weight and cost are a volumetric estimate; run the `structure` stage for the framed structure and BOM."]
+            if "structure" not in d else
+            ["- Structural design aid only, not a stamped design. Material values and the phi factors marked ASSUMED must be confirmed "
+             "against the manufacturer's ASTM D7290 characteristic values and ASCE/SEI 74-23 before construction.",
+             "- Joints are modelled rigid (beams/columns) and pinned (braces); fan dynamic loads, thermal expansion, "
+             "erection loads and ice are not analysed. Seismic weight conservatively includes the full fill hold-up water."]),
           "- Basin civil design (concrete, reinforcement) is by others; dimensions here are hydraulic.", "",
-          "## 10. Deliverables", "", _t(list(files.items()), ["File", "Content"]), ""]
+          "## 11. Deliverables", "", _t(list(files.items()), ["File", "Content"]), ""]
     path.write_text("\n".join(L), encoding="utf-8")

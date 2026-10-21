@@ -80,6 +80,26 @@ def optimisation(df, sel, path):
     _save(fig, path)
 
 
+def structure_ur(st: dict, path):
+    """Isometric wireframe of the analysed block, members coloured by utilisation ratio."""
+    fr, res = st["_fr"], st["_res"]
+    fig = plt.figure(figsize=(9, 6))
+    ax = fig.add_subplot(111, projection="3d")
+    cmap = plt.get_cmap("RdYlGn_r")
+    for mb in fr["members"]:
+        (x1, y1, z1), (x2, y2, z2) = fr["nodes"][mb["i"]], fr["nodes"][mb["j"]]
+        ur = res[mb["name"]]["UR"]
+        ax.plot([x1, x2], [z1, z2], [y1, y2], color=cmap(min(ur, 1.0)), lw=0.6 if mb["kind"] == "brace" else 1.0)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
+    fig.colorbar(sm, ax=ax, shrink=0.6, label="utilisation ratio")
+    ax.set_xlabel("X along row (m)"); ax.set_ylabel("Z across (m)"); ax.set_zlabel("elevation (m)")
+    xs, zs = fr["xs"], fr["zs"]
+    ax.set_box_aspect((xs[-1] - xs[0], zs[-1] - zs[0], fr["tiers"][-1][1] - fr["tiers"][0][1]))
+    ax.view_init(elev=22, azim=-60)
+    ax.set_title(f"FRP frame, {st['grid']['cells_modelled']} cell(s) analysed: {st['n_members']} members")
+    _save(fig, path)
+
+
 def poppe_profile(t: dict, P: float, path):
     pr = t["selected"]["_poppe_profile"]                 # Tw, w, ima, Me, Ta, sat, Lef
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 4))

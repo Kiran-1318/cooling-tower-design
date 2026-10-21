@@ -159,3 +159,92 @@ With the generic loss set, fan static pressure scales from about 125–175 Pa at
 
 ### Water balance
 Perry's eqs. 12-9 to 12-12, with blowdown corrected for drift (B = E/(C − 1) − D). Perry's uncorrected form is also reported as the conservative bound, and Perry's Example 13 is reproduced in the tests.
+
+## 9. FRP structure (`structure.py`, `frp.py`, `loads.py`, `bom.py`)
+
+### Sources
+- **ASCE/SEI 74-23**, *LRFD of Pultruded FRP Structures*. The values used here were taken from presentations, not from the standard itself:
+  - M. Zarghamee (SGH), "New Standard for LRFD Design of Pultruded Structures", ACMA Composites Technology Day / Pultrusion Conference 2021. Source of:
+    - time-effect factors λ
+    - material adjustment factors C_M and C_T
+    - the compression strength, serviceability and slenderness checks
+    - the lateral-torsional buckling equation
+    - Table 9.1.2: R = Cd = Ω₀ = 2 for an ordinary braced cooling tower
+    - the rules for ordinary braced cooling towers
+  - J. T. Mottram (Warwick), Composite Engineering Show 2014. Source of the resistance factors φ from the 2010 ASCE pre-standard: global buckling 0.70, local buckling 0.80, web crippling 0.70, pin bearing 0.80, net tension 0.50 (one bolt row) / 0.45 (multiple rows).
+- **Assumed** φ values, pending a check against ASCE 74-23: material rupture 0.65, shear 0.70, shear-out 0.50, stainless-steel bolts 0.75 (AISC-type).
+
+### Framing (ASCE 74 ordinary braced cooling tower)
+- Column bays fall within `column_bay_m`, with at least 4 column lines.
+- Columns are continuous from the basin floor to the fan deck.
+- Beam tiers:
+  - basin tie (curb level)
+  - fill support
+  - distribution support
+  - eliminator support
+  - fan deck
+- Every column line is braced in both directions, with diagonals in alternate bays and alternating direction, in each storey at least 0.9 m tall.
+- Model idealisation:
+  - beams and columns rigidly connected
+  - braces pin-ended
+  - column bases pinned
+
+### Loads
+| Case | Content |
+|---|---|
+| D | Self weight, dry fill, pipes (30 % of the pipe water weight), wet eliminators (15 kg/m²), deck panels (30 kg/m²), casing (8 kg/m²), fan + gear + motor (25·D² + 8·kW kg) and the FRP stack (20 kg/m²) |
+| F | Fill hold-up (`fill_hold_up_kg_m3`) and water in the distribution pipes |
+| L | Fan-deck live load |
+| S | 0.7·ground snow |
+| W | Wind on the full casing face plus the stack. Constants: Kz from exposure, Kd 0.90, Ke from altitude, G 0.85, Cf 1.3–1.4 by h/D (cylinder 0.7 for the stack). |
+| E | ELF base shear distributed by C_vx. The seismic weight includes the full hold-up water (conservative). |
+
+### Combinations
+LRFD combinations of ASCE 7-16 §2.3, with F carrying the dead-load factor. Each combination has its ASCE 74 time-effect factor λ:
+
+| Combination | λ |
+|---|---|
+| 1.4(D+F) | 0.4 |
+| 1.2(D+F) + 1.6L | 0.8 |
+| 1.2(D+F) + 1.6S + (L or 0.5W) | 0.75 |
+| full-wind and seismic combinations | 1.0 |
+
+### Analysis
+- PyNite 3D frame, linear.
+- Each primary case is solved once, and the combinations are built by superposition.
+- Internal forces at five stations along each member are rebuilt from PyNite's local end forces plus the member's uniform load. This reconstruction is checked against PyNite's own axial, shear and moment functions in the tests.
+
+### Member check
+Each member must satisfy R_u ≤ λ·φ·R_n, with R_n = C·R_o.
+
+- **C factor** for a wet interior at the service temperature, which is the larger of the hot-water temperature and the exit-air temperature.
+- **Compression:** min(φ_g·π²·E_L·A/(KL/r)², φ_l·F_local·A, 0.7·F_L^c·A).
+- **Local buckling** (orthotropic plates):
+  - outstanding flange: 4·G_LT·t²/b_f²
+  - internal plate: (π²/6)(t/b)²[(√(E_L·E_T) + ν_LT·E_T)/(1 − ν_LT·ν_TL) + 2·G_LT]
+- **Flexure:** the lowest of rupture, local buckling and lateral-torsional buckling.
+- **Shear:** the lower of rupture and the web shear-buckling estimate.
+- **Interaction:** linear axial + bending, with amplification 1/(1 − P/Pe) in compression.
+
+### Serviceability
+- **Slenderness:** KL/r ≤ 1.4·√(E_L·A/P_D).
+- **Compression under service load:** P_s ≤ φ₀·Pe ≤ 0.3·F_L^c·A, with φ₀ = 1 − 500·δ₀/L.
+- **Beam deflection:** ≤ L/180 under D+F+L.
+- **Drift:** ≤ H/150 under 0.6W.
+
+### Sizing
+For every group that fails, the next iteration jumps straight to the smallest section that passes the current forces. The frame is then re-analysed until no group needs to change, usually in 2 iterations.
+
+### Connections
+- **Beam ends:** a pair of FRP clip angles.
+- **Braces:** through-bolted to a 12 mm FRP gusset, in double shear.
+- **Limit states checked:** bolt shear, pin bearing, net tension and shear-out. End distance is 2d and pitch is 4d.
+- **Demand:** the maximum of force/λ over all combinations, so permanent loads keep their λ of 0.4.
+
+### BOM
+- The section sizes are applied to the framing of the whole row of cells.
+- Columns run in one piece when the stock length allows.
+- Beams are cut from stock lengths and spliced at columns. Each splice uses two FRP plates and 8 bolts, and develops 50 % of the beam's flexural capacity and 25 % of its tensile capacity, per ASCE 74.
+- Hardware listed: clip angles, gussets, bolt sets by diameter and length, and column-base anchor brackets.
+- Other components listed: envelope, fill and eliminators, nozzles and pipework, mechanical equipment, access, and basin connections.
+- The FRP framing and connection weight replaces the Phase 2 volumetric estimate in the capital cost.

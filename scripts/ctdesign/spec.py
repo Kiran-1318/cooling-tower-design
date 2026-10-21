@@ -117,13 +117,22 @@ DEFAULT_SPEC = {
         "fill_hold_up_kg_m3": 150.0,       # wet fill + scale/biofouling allowance on fill supports
         "fan_deck_live_kPa": 2.4,
         "casing": "frp_corrugated",
+        "frp_material": "vinyl_ester_generic",   # key into frp_profiles.json materials
+        "model_cells_max": 2,              # representative block analysed when the tower has more cells
+        "deflection_limit": 180,           # beams, L/n under D+F+L
+        "drift_limit": 150,                # frame, H/n under 0.6 W
+        "out_of_straightness": 0.001,      # delta_0 / L for the ASCE 74 serviceability compression check
+        "stock_length_m": 6.1,             # beam pieces (spliced at columns)
+        "column_stock_length_m": 12.2,
     },
     "loads": {
-        "code": "ASCE 7-22",
+        "code": "ASCE 7-16 (wind/seismic constants); ASCE/SEI 74 for FRP",
         "risk_category": "II",
-        "wind_speed_m_s": 45.0,            # basic wind speed V (3-s gust, 10 m, exposure C)
+        "wind_speed_m_s": 45.0,            # basic wind speed V (3-s gust, 10 m, exposure C) for the risk category
         "exposure": "C",
-        "seismic": {"Ss": 0.25, "S1": 0.10, "site_class": "D", "Ie": 1.0},
+        "Kd": 0.90,                        # square chimneys/tanks and similar (ASCE 7 Table 26.6-1)
+        "seismic": {"Ss": 0.25, "S1": 0.10, "site_class": "D", "Ie": 1.0, "SDS": None, "SD1": None,
+                    "R": 2.0, "Cd": 2.0, "Omega0": 2.0, "TL": 8.0},
         "ground_snow_kPa": 0.0,
     },
     "costs": {

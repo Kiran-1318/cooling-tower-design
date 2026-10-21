@@ -128,6 +128,18 @@ Replace any of these with vendor data when you have it.
 | `fan_deck_live_kPa` | 2.4 | |
 | `casing` | `frp_corrugated` | |
 
+More `structure` fields:
+
+| field | default | notes |
+|---|---|---|
+| `frp_material` | `vinyl_ester_generic` | key into `frp_profiles.json` materials; `polyester_generic` is also available, or add the pultruder's own characteristic values |
+| `model_cells_max` | 2 | towers with more cells are analysed as a representative block of this many cells, and the member sizes are applied to every cell |
+| `deflection_limit` | 180 | beam deflection limit L/n under D+F+L |
+| `drift_limit` | 150 | frame drift limit H/n under 0.6W |
+| `out_of_straightness` | 0.001 | δ₀/L for the ASCE 74 serviceability compression check |
+| `stock_length_m` | 6.1 | beam stock length; beams are spliced at columns |
+| `column_stock_length_m` | 12.2 | |
+
 ## loads (ASCE 7)
 | field | default | notes |
 |---|---|---|
@@ -137,6 +149,14 @@ Replace any of these with vendor data when you have it.
 | `exposure` | `C` | `B`, `C` or `D` |
 | `seismic` | `{Ss, S1, site_class, Ie}` | |
 | `ground_snow_kPa` | 0 | |
+| `Kd` | 0.90 | wind directionality factor |
+
+The wind and seismic constants follow ASCE 7-16.
+
+More `seismic` fields:
+- Give `SDS` and `SD1` directly whenever you can, taken from the ASCE Hazard Tool (which also covers 7-22). Otherwise they are derived from Ss, S1 and the site class using the ASCE 7-16 Fa/Fv tables.
+- `R`, `Cd` and `Omega0` default to 2, the ASCE/SEI 74 values for an ordinary braced cooling tower.
+- `TL` defaults to 8 s.
 
 ## costs
 These rates drive the optimiser objective: capital cost plus the present value of fan and pump energy.

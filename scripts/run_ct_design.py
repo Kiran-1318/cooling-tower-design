@@ -24,10 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ctdesign import spec as specmod                                  # noqa: E402
 import pandas as pd
 
-from ctdesign import thermal_design, plots, sizing, report            # noqa: E402
+from ctdesign import thermal_design, plots, sizing, report, structure, bom   # noqa: E402
 
 STAGES = ["basis", "thermal", "size", "structure", "drawings", "model", "report"]
-IMPLEMENTED = {"basis", "thermal", "size", "report"}
+IMPLEMENTED = {"basis", "thermal", "size", "structure", "report"}
 
 
 def _jsonable(o):
@@ -124,12 +124,43 @@ def stage_size(b: specmod.Basis, out: Path, quick: bool, params: str | None) -> 
     return d
 
 
+def _reload(b: specmod.Basis, out: Path) -> dict:
+    """Rebuild the selected design from design_results.json (for stage-by-stage runs)."""
+    res = json.loads((out / "data" / "design_results.json").read_text(encoding="utf-8"))
+    d = sizing.finalize(b, res["params"])
+    cand = out / "data" / "candidates.csv.gz"
+    d["candidates"] = pd.read_csv(cand) if cand.exists() else pd.DataFrame()
+    return d
+
+
+def stage_structure(b: specmod.Basis, out: Path, d: dict | None) -> dict:
+    d = d or _reload(b, out)
+    st = structure.design(d, b, b.spec)
+    B = bom.build(d, b, b.spec, st)
+    summ = bom.summary(B)
+    bom.apply_cost(d, b.spec, summ)
+    d["structure"], d["bom"], d["bom_summary"] = st, B, summ
+    tag = b.spec["project"]["tag"]
+    B.to_csv(out / "data" / f"{tag}_BOM.csv", index=False)
+    with pd.ExcelWriter(out / "data" / f"{tag}_BOM.xlsx") as xw:
+        B.to_excel(xw, sheet_name="BOM", index=False)
+        pd.DataFrame([{"group": g, **v} for g, v in st["groups"].items()]).to_excel(xw, sheet_name="Member groups", index=False)
+        pd.DataFrame([{"group": g, **v} for g, v in st["connections"].items()]).to_excel(xw, sheet_name="Connections", index=False)
+    (out / "data" / "structure.json").write_text(
+        json.dumps(_jsonable({k: v for k, v in st.items() if k != "members"}), indent=2, default=str), encoding="utf-8")
+    plots.structure_ur(st, out / "plots" / "06_structure_utilisation.svg")
+    print(f"[structure] {st['n_members']} members analysed ({st['grid']['cells_modelled']} cell block), "
+          f"max UR {max(v['UR_max'] for v in st['groups'].values()):.2f}; FRP {summ['frp_structure_kg'] / 1e3:.1f} t + "
+          f"connections {summ['connections_kg'] / 1e3:.1f} t; seismic Cs {st['seismic']['Cs']:.3f}; "
+          f"violations {st['violations'] or 'none'}")
+    return d
+
+
 def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
     if d is None:                                         # report-only run: rebuild from the saved selection
-        res = json.loads((out / "data" / "design_results.json").read_text(encoding="utf-8"))
-        d = sizing.finalize(b, res["params"])
-        cand = out / "data" / "candidates.csv.gz"
-        d["candidates"] = pd.read_csv(cand) if cand.exists() else pd.DataFrame()
+        d = _reload(b, out)
+        if (out / "data" / "structure.json").exists():
+            d = stage_structure(b, out, d)
     tag = b.spec["project"]["tag"]
     files = {"REPORT.md": "Technical design report", "DATASHEET.md": "CTI-style datasheet",
              f"data/{tag}_datasheet.xlsx": "Datasheet (Excel)", "data/design_results.json": "Every computed value",
@@ -137,6 +168,10 @@ def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
              "plots/01_demand_supply.svg": "Demand vs tower characteristic", "plots/02_performance_curves.svg": "Performance curves",
              "plots/03_poppe_profile.svg": "Poppe profile and air path", "plots/04_pressure_breakdown.svg": "Air-side losses",
              "plots/05_optimisation.svg": "Optimisation trade-off"}
+    if "structure" in d:
+        files.update({f"data/{tag}_BOM.xlsx": "Fabrication BOM, member groups, connections (Excel)",
+                      f"data/{tag}_BOM.csv": "Fabrication BOM (CSV)", "data/structure.json": "Structural results",
+                      "plots/06_structure_utilisation.svg": "FRP frame coloured by utilisation"})
     report.write_datasheet(d, b, out / "DATASHEET.md", out / "data" / f"{tag}_datasheet.xlsx")
     report.write_report(d, b, d["candidates"], out / "REPORT.md", files)
     print(f"[report] {out.resolve() / 'REPORT.md'}")
@@ -168,6 +203,8 @@ def main(argv=None):
             stage_thermal(b, out)
         elif st == "size":
             d = stage_size(b, out, a.quick, a.params)
+        elif st == "structure":
+            d = stage_structure(b, out, d)
         elif st == "report":
             stage_report(b, out, d)
 

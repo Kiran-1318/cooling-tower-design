@@ -1,0 +1,38 @@
+{
+  "_note": "Nominal catalog sizes common to North American pultruders (inches: depth x flange x thickness). Section properties are COMPUTED from these nominal dimensions (sharp corners, no fillets) in frp.py - they are not copied from a manufacturer table. Confirm against the selected manufacturer's catalog.",
+  "materials": {
+    "vinyl_ester_generic": {
+      "basis": "GENERIC - representative characteristic values for vinyl-ester glass pultruded shapes. Replace with the manufacturer's ASTM D7290 characteristic values for the actual product line.",
+      "resin": "vinyl_ester",
+      "E_L_GPa": 17.2, "E_T_GPa": 5.5, "G_LT_GPa": 2.9, "nu_LT": 0.33,
+      "F_Lt_MPa": 200.0, "F_Lc_MPa": 200.0, "F_Lb_MPa": 200.0, "F_v_MPa": 30.0, "F_br_MPa": 150.0,
+      "density_kg_m3": 1850.0
+    },
+    "polyester_generic": {
+      "basis": "GENERIC - representative characteristic values for polyester glass pultruded shapes.",
+      "resin": "polyester",
+      "E_L_GPa": 17.2, "E_T_GPa": 5.5, "G_LT_GPa": 2.9, "nu_LT": 0.33,
+      "F_Lt_MPa": 190.0, "F_Lc_MPa": 190.0, "F_Lb_MPa": 190.0, "F_v_MPa": 28.0, "F_br_MPa": 140.0,
+      "density_kg_m3": 1850.0
+    }
+  },
+  "adjustment": {
+    "basis": "ASCE/SEI 74 material adjustment factors as presented by M. Zarghamee (ACMA Composites Technology Day / Pultrusion Conference 2021): C_M for sustained moisture (50 yr); C_T for sustained 90 < T <= 140 F, T in F.",
+    "vinyl_ester": {"CM_strength": 0.75, "CM_modulus": 0.90, "CT_strength": [1.7, -0.008], "CT_modulus": [1.5, -0.006]},
+    "polyester":   {"CM_strength": 0.75, "CM_modulus": 0.90, "CT_strength": [1.9, -0.010], "CT_modulus": [1.7, -0.008]}
+  },
+  "shapes": {
+    "SQ": [[2.0, 0.25], [3.0, 0.25], [3.5, 0.25], [4.0, 0.25], [4.0, 0.375], [6.0, 0.375]],
+    "I":  [[4.0, 2.0, 0.25], [6.0, 3.0, 0.25], [6.0, 3.0, 0.375], [8.0, 4.0, 0.375], [10.0, 5.0, 0.5], [12.0, 6.0, 0.5]],
+    "W":  [[4.0, 4.0, 0.25], [6.0, 6.0, 0.25], [6.0, 6.0, 0.375], [8.0, 8.0, 0.375], [10.0, 10.0, 0.5], [12.0, 12.0, 0.5]],
+    "L":  [[3.0, 3.0, 0.25], [4.0, 4.0, 0.375], [6.0, 6.0, 0.5]]
+  },
+  "groups": {
+    "column":       {"family": "SQ"},
+    "fill_beam":    {"family": "I"},
+    "dist_beam":    {"family": "I"},
+    "elim_beam":    {"family": "I"},
+    "deck_beam":    {"family": "W"},
+    "brace":        {"family": "SQ"}
+  }
+}
