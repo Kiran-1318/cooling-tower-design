@@ -227,7 +227,7 @@ Each member must satisfy R_u ≤ λ·φ·R_n, with R_n = C·R_o.
 - **Interaction:** linear axial + bending, with amplification 1/(1 − P/Pe) in compression.
 
 ### Serviceability
-- **Slenderness:** KL/r ≤ 1.4·√(E_L·A/P_D).
+- **Slenderness:** KL/r ≤ 1.4·√(E_L·A/P_D). ASCE 74 defines P_D from unfactored dead load; the skill uses the sustained load D + F, because the fill hold-up water is permanent in operation. Like service compression, this limit is enforced during member sizing, not just reported.
 - **Compression under service load:** P_s ≤ φ₀·Pe ≤ 0.3·F_L^c·A, with φ₀ = 1 − 500·δ₀/L.
 - **Beam deflection:** ≤ L/180 under D+F+L.
 - **Drift:** ≤ H/150 under 0.6W.

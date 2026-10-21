@@ -4,3 +4,4 @@ __pycache__/
 results*/
 *.FCStd1
 *.FCBak
+*.log

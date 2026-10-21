@@ -1,0 +1,13 @@
+numpy
+scipy
+pandas
+openpyxl
+matplotlib
+CoolProp
+fluids
+ezdxf>=1.4
+PyNiteFEA>=3.2
+PyMuPDF
+psychrolib
+pytest
+# 3D model: FreeCAD >= 1.0 (provides freecadcmd; uses its own bundled Python)

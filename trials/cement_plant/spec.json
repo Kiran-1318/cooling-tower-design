@@ -1,0 +1,11 @@
+{
+  "project": {"name": "Cement plant process cooling water tower", "tag": "CT-301", "client": "Trial case",
+              "site_name": "Palakkad, Kerala (trial)", "revision": "A", "drawn_by": "cooling-tower-design skill"},
+  "site": {"design_wet_bulb_C": 27.5, "design_dry_bulb_C": 33.5, "altitude_m": 100, "recirculation_allowance_C": 0.5},
+  "duty": {"water_flow_m3_h": 1800.0, "hot_water_C": 41.0, "cold_water_C": 32.0},
+  "tower": {"fill_type": "low_clog_film", "drift_rate_pct": 0.001},
+  "water": {"cycles_of_concentration": 4},
+  "loads": {"wind_speed_m_s": 39.0, "exposure": "C", "risk_category": "II",
+            "seismic": {"Ss": 0.4, "S1": 0.16, "site_class": "D", "Ie": 1.0}},
+  "costs": {"years": 10}
+}

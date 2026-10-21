@@ -313,6 +313,21 @@ def forces_for(arr: np.ndarray, fv: np.ndarray) -> dict:
             "My": np.abs(X[4]).max(), "V": max(np.abs(X[1]).max(), np.abs(X[2]).max())}
 
 
+def compression_limits(sec, mat, mb, R: dict, info: dict, delta0_L: float = 0.001) -> tuple[float, str]:
+    """ASCE 74 limits on compression members (columns, braces), as utilisation ratios:
+    slenderness KL/r <= 1.4 sqrt(E_L A / P_D), with P_D the sustained unfactored load D + F (the fill's
+    water hold-up is permanent in operation, so it is treated as dead load for this creep-related limit),
+    and the serviceability check Ps <= phi_0 Pe <= 0.3 F_L^c A under D+F+L. Beams return 0."""
+    if mb["kind"] == "beam":
+        return 0.0, ""
+    PD = forces_for(R[mb["name"]], factors(info, {"D": 1.0, "F": 1.0}))["Pc"]
+    Ps = forces_for(R[mb["name"]], factors(info, {"D": 1.0, "F": 1.0, "L": 1.0}))["Pc"]
+    _, KLr, lim = frp.slenderness_ok(sec, mat, mb["L"], PD)
+    ur_s = KLr / lim if math.isfinite(lim) else 0.0
+    _, ur_v = frp.serviceability_ok(sec, mat, mb["L"], Ps, delta0_L)
+    return (ur_s, "slenderness (ASCE 74)") if ur_s >= ur_v else (ur_v, "service compression (ASCE 74)")
+
+
 def check_all(fr, R: dict, sizes, fam, secs, mat, info) -> dict:
     res = {}
     fvs = [(c, factors(info, c["f"])) for c in info["combos"]]
@@ -326,6 +341,9 @@ def check_all(fr, R: dict, sizes, fam, secs, mat, info) -> dict:
                 r = frp.check_member(sec, mat, mb["L"], {"P": P, "Mz": f["Mz"], "My": f["My"], "V": f["V"]}, c["lam"], caps=caps)
                 if worst is None or r["UR"] > worst["UR"]:
                     worst = {**r, "combo": c["name"], "lam": c["lam"], **f}
+        ur_c, why = compression_limits(sec, mat, mb, R, info)
+        if ur_c > worst["UR"]:
+            worst.update(UR=ur_c, governs=why, combo="D (+F+L) service")
         res[mb["name"]] = worst
     return res
 
@@ -342,6 +360,9 @@ def required_index(group, fr, R, start, fam, secs, mat, info) -> int:
         ok = True
         for mb in members:
             caps = frp.capacities(sec, mat, mb["L"])
+            if compression_limits(sec, mat, mb, R, info)[0] > 1.0:
+                ok = False
+                break
             for lam, f in forces[mb["name"]]:
                 for P in (f["Pt"], -f["Pc"]):
                     if frp.check_member(sec, mat, mb["L"], {"P": P, "Mz": f["Mz"], "My": f["My"], "V": f["V"]},
@@ -410,11 +431,12 @@ def finish(d, b, s, fr, ldd, m, info, R, res, sizes, fam, secs, mat, seis, hist)
         if mb["kind"] == "beam":
             continue
         sec = secs[fam[mb["group"]]][sizes[mb["group"]]]
-        PD = forces_for(R[n], factors(info, {"D": 1.0, "F": 1.0, "L": 1.0}))["Pc"]
+        PD = forces_for(R[n], factors(info, {"D": 1.0, "F": 1.0}))["Pc"]
+        Ps = forces_for(R[n], factors(info, {"D": 1.0, "F": 1.0, "L": 1.0}))["Pc"]
         ok, KLr, lim = frp.slenderness_ok(sec, mat, mb["L"], PD)
         if not ok:
             slender.append((n, KLr, lim))
-        ok2, ur2 = frp.serviceability_ok(sec, mat, mb["L"], PD, st.get("out_of_straightness", 0.001))
+        ok2, ur2 = frp.serviceability_ok(sec, mat, mb["L"], Ps, st.get("out_of_straightness", 0.001))
         if not ok2:
             svc.append((n, ur2))
     # beam deflection under SLS D+F+L and frame drift under 0.6W

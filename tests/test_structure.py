@@ -160,6 +160,16 @@ def test_frame_passes_and_statics(hvac_struct):
     assert st["base_reactions"]["max_down_kN"] > 0
 
 
+def test_sizing_enforces_asce74_compression_limits():
+    # trial case (cement plant) where slenderness used to be reported but not designed for
+    b = spec.load(ROOT / "trials" / "cement_plant" / "spec.json")
+    d = sizing.finalize(b, {"cells": 4, "L": 6.1, "W": 6.1, "depth": 1.8, "fan_D": 4.3})
+    st = structure.design(d, b, b.spec, log=lambda *a: None)
+    assert st["slenderness_failures"] == 0 and st["serviceability_failures"] == 0
+    assert st["violations"] == []
+    assert any("slenderness" in g["governs"] for g in st["groups"].values())   # the limit is active in sizing
+
+
 def test_gravity_equilibrium(hvac_struct):
     b, d, _ = hvac_struct
     s = b.spec

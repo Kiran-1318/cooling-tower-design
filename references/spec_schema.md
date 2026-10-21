@@ -168,5 +168,9 @@ There is one more cost field: `frp_kg_per_m3` (default 9). It estimates the FRP 
 ## grid
 The optimiser's search space: `cells`, `cell_plan_m` (a list of `[L, W]` pairs), `fill_depth_m` and `fan_diameter_m`.
 
+## freecad (optional)
+- `freecadcmd`: the path to FreeCAD's command-line executable.
+- It is used only when FreeCAD is not found automatically, which happens when it is not in `FREECADCMD`, the standard install paths or `PATH`.
+
 ## rating_cases
 Off-design cases rated on the final tower, each `{"label", "wet_bulb_C", "flow_factor", "range_C"}`.
