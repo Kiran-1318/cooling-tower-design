@@ -6,6 +6,11 @@ import pandas as pd
 from .spec import Basis
 
 
+def _ga_png(d: dict) -> str:
+    ga = next(sh for sh in d["drawings"] if sh["number"] == "GA-001")
+    return "drawings/" + ga[".png"].replace("\\", "/").rsplit("/", 1)[-1]
+
+
 def _t(rows, head):
     out = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     out += ["| " + " | ".join(str(c) for c in r) + " |" for r in rows]
@@ -173,6 +178,7 @@ def write_report(d: dict, b: Basis, df: pd.DataFrame, path, files: dict):
              ("Fan + pump power", f"{d['cost']['energy_kW']:.0f} kW"),
              ("Capital (estimate)", f"{d['cost']['capex_total']:,.0f} {s['costs']['currency']}"),
              ("Total present cost", f"{d['cost']['total_present_cost']:,.0f} {s['costs']['currency']}")], ["Item", "Value"]), "",
+         *([f"![General arrangement]({_ga_png(d)})", ""] if d.get("drawings") else []),
          "## 3. Thermal design", "",
          f"Merkel demand at the design L/G is KaV/L = {th['Me_demand']:.3f} (CTI 4-point Chebyshev "
          f"{th['Me_demand_chebyshev']:.3f}). The tower supplies {th['Me_total']:.3f} = fill {th['Me_fill']:.3f} + rain zone "

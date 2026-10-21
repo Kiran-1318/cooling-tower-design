@@ -25,9 +25,10 @@ from ctdesign import spec as specmod                                  # noqa: E4
 import pandas as pd
 
 from ctdesign import thermal_design, plots, sizing, report, structure, bom   # noqa: E402
+from ctdesign import drawings_dxf                                          # noqa: E402
 
 STAGES = ["basis", "thermal", "size", "structure", "drawings", "model", "report"]
-IMPLEMENTED = {"basis", "thermal", "size", "structure", "report"}
+IMPLEMENTED = {"basis", "thermal", "size", "structure", "drawings", "report"}
 
 
 def _jsonable(o):
@@ -156,6 +157,19 @@ def stage_structure(b: specmod.Basis, out: Path, d: dict | None) -> dict:
     return d
 
 
+def stage_drawings(b: specmod.Basis, out: Path, d: dict | None) -> dict:
+    if d is None:
+        d = _reload(b, out)
+        if (out / "data" / "structure.json").exists():
+            d = stage_structure(b, out, d)
+    sheets = drawings_dxf.make_all(d, b, out / "drawings")
+    d["drawings"] = sheets
+    (out / "data" / "drawing_register.json").write_text(json.dumps(sheets, indent=2), encoding="utf-8")
+    print(f"[drawings] {len(sheets)} sheets (DXF + SVG + PDF + PNG) and "
+          f"{b.spec['project']['tag']}_drawing_set.pdf in {(out / 'drawings').resolve()}")
+    return d
+
+
 def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
     if d is None:                                         # report-only run: rebuild from the saved selection
         d = _reload(b, out)
@@ -168,6 +182,11 @@ def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
              "plots/01_demand_supply.svg": "Demand vs tower characteristic", "plots/02_performance_curves.svg": "Performance curves",
              "plots/03_poppe_profile.svg": "Poppe profile and air path", "plots/04_pressure_breakdown.svg": "Air-side losses",
              "plots/05_optimisation.svg": "Optimisation trade-off"}
+    for sh in d.get("drawings", []):
+        rel = Path(sh[".dxf"]).relative_to(out).as_posix()
+        files[rel.replace(".dxf", ".dxf / .svg / .pdf")] = f"{sh['number']} {sh['title'].title()} ({sh['scale']})"
+    if d.get("drawings"):
+        files[f"drawings/{tag}_drawing_set.pdf"] = "Complete drawing set (PDF, A1)"
     if "structure" in d:
         files.update({f"data/{tag}_BOM.xlsx": "Fabrication BOM, member groups, connections (Excel)",
                       f"data/{tag}_BOM.csv": "Fabrication BOM (CSV)", "data/structure.json": "Structural results",
@@ -205,6 +224,8 @@ def main(argv=None):
             d = stage_size(b, out, a.quick, a.params)
         elif st == "structure":
             d = stage_structure(b, out, d)
+        elif st == "drawings":
+            d = stage_drawings(b, out, d)
         elif st == "report":
             stage_report(b, out, d)
 

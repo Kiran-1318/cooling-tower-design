@@ -248,3 +248,41 @@ For every group that fails, the next iteration jumps straight to the smallest se
 - Hardware listed: clip angles, gussets, bolt sets by diameter and length, and column-base anchor brackets.
 - Other components listed: envelope, fill and eliminators, nozzles and pipework, mechanical equipment, access, and basin connections.
 - The FRP framing and connection weight replaces the Phase 2 volumetric estimate in the capital cost.
+
+## 10. Drawings (`dxfsheet.py`, `drawings_dxf.py`)
+
+### How the sheets are built
+- **Geometry:** drawn 1:1 in millimetres in DXF modelspace (`$INSUNITS` = mm).
+- **Sheet furniture:** the A1 frame, title block, notes box, text heights and dimension style are all scaled by the sheet scale 1:S. The DXF therefore opens at true size in any CAD program and prints to A1 at 1:S.
+- **Scale:** the smallest standard scale from 1:1 to 1:1000 at which every view, plus its annotation margins, fits the view area.
+- **Layers:** FRAME, TITLE, OUTLINE, THIN, HIDDEN (dashed), CENTER (grid), DIM, TEXT, STRUCT, BRACE, WATER, PIPE, EQUIP, HATCH, FILLPACK, AIR and CONCRETE, each with its own colour and lineweight.
+- **Dimensions:** true associative-style ezdxf linear dimensions that measure model geometry (tested against the design values).
+- **Level markers:** where labels fall close together, they are pushed apart and tied back to their marker with a leader.
+
+### Sheets
+| Sheet | Content |
+|---|---|
+| GA-001 | General arrangement: plan at fan deck (grid bubbles, columns, fans, risers, air inlets), side elevation (inlets, casing, stacks, handrails, ladder, risers, levels) and end elevation |
+| GA-002 | Section A-A across a cell: every zone from the basin to the stack, nozzles, header and laterals, fan, gear, motor, air and water flows, and the full dimension chain. Section B-B along the row: two cells, plus a break and "similar" note when there are more. |
+| ME-003 | Fan deck plan of a typical cell: stack, fan, gear reducer, drive shaft, motor, mechanical support and hatch. Also the stack detail and the fan/drive data table. |
+| WD-004 | Distribution plan of a typical cell: header, laterals and nozzles with pitches. Also nozzle, pipe and hydraulics schedules. |
+| CV-005 | Basin plan with wall hatching, column bases, pump suction bays to HI 9.8 and connections. Also the sump section with submergence, the basin data and the base reactions. |
+| ST-006 | FRP framing plan for each tier of a typical cell, with a member mark on every beam, plus the member schedule from the BOM |
+| ST-007 | Framing elevations of grid lines A and 1, showing the actual brace pattern from the analysis model, with tier levels, bay dimensions and the connection schedule |
+| DS-008 | Datasheet (the same rows as `DATASHEET.md`) |
+
+### Member marks
+| Mark | Member |
+|---|---|
+| C1 | column |
+| TB1 | basin tie beam |
+| FB1 | fill support beam |
+| DB1 | distribution support beam |
+| EB1 | eliminator support beam |
+| KB1 | fan deck beam |
+| BR1-n | brace (n = cut-length variant) |
+
+### Exports
+- Each sheet goes to DXF (the CAD master), SVG (ezdxf drawing add-on), PDF and a PNG preview (PyMuPDF backend).
+- All sheets are also merged into `<tag>_drawing_set.pdf`.
+- **Checks:** every DXF passes the ezdxf audit with no errors. FreeCAD 1.1's own DXF importer reads the GA sheet; only one dimension-arrow SOLID entity is reported as unsupported.
