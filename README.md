@@ -88,6 +88,10 @@ This is a **design aid, not a stamped design**. Every output marks which data is
 
 Full method, equations and sources are in [`references/methodology.md`](references/methodology.md). Design rules of thumb are in [`references/design_guidance.md`](references/design_guidance.md).
 
+## License
+
+MIT, see [`LICENSE`](LICENSE). The engineering outputs are a design aid; responsibility for any design built from them rests with the engineer of record.
+
 ## Repository layout
 
 ```
