@@ -1,0 +1,8 @@
+{
+  "project": {"name": "Chiller plant cooling tower", "tag": "CT-101", "client": "Example", "site_name": "Coastal site", "revision": "A"},
+  "site": {"design_wet_bulb_C": 24.0, "design_dry_bulb_C": 32.0, "altitude_m": 50, "recirculation_allowance_C": 0.5},
+  "duty": {"water_flow_m3_h": 1000.0, "hot_water_C": 32.0, "cold_water_C": 27.5},
+  "tower": {"cells": 2, "fill_type": "film"},
+  "water": {"cycles_of_concentration": 5},
+  "loads": {"wind_speed_m_s": 45.0, "exposure": "C"}
+}

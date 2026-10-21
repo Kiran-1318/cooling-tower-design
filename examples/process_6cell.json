@@ -1,0 +1,13 @@
+{
+  "project": {"name": "Refinery cooling water tower", "tag": "CT-201", "client": "Example", "site_name": "Inland site", "revision": "A"},
+  "site": {"design_wet_bulb_C": 28.0, "design_dry_bulb_C": 40.0, "altitude_m": 300, "recirculation_allowance_C": 1.0},
+  "duty": {"water_flow_m3_h": 10000.0, "range_C": 10.0, "approach_C": 4.0},
+  "tower": {"fill_type": "low_clog_film", "drift_rate_pct": 0.0005},
+  "water": {"cycles_of_concentration": 4},
+  "loads": {"wind_speed_m_s": 50.0, "exposure": "C", "risk_category": "III",
+            "seismic": {"Ss": 0.6, "S1": 0.2, "site_class": "D", "Ie": 1.25}},
+  "rating_cases": [
+    {"label": "WB +2 K", "wet_bulb_C": 31.0},
+    {"label": "110 % flow", "flow_factor": 1.1}
+  ]
+}
