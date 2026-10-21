@@ -286,3 +286,44 @@ For every group that fails, the next iteration jumps straight to the smallest se
 - Each sheet goes to DXF (the CAD master), SVG (ezdxf drawing add-on), PDF and a PNG preview (PyMuPDF backend).
 - All sheets are also merged into `<tag>_drawing_set.pdf`.
 - **Checks:** every DXF passes the ezdxf audit with no errors. FreeCAD 1.1's own DXF importer reads the GA sheet; only one dimension-arrow SOLID entity is reported as unsupported.
+
+## 11. 3D model (`model3d.py`, `freecad/build_model.py`, `freecad/check_step.py`)
+
+### Input
+- The `model` stage writes a self-contained `model` block into `data/design_results.json`. Everything is in millimetres, with:
+  - X along the cell row
+  - Y across a cell
+  - Z up
+  - Z = 0 at the basin operating water level
+- The block holds every FRP member of the whole tower (end nodes, mark and group), the section geometry per group, the elevations, and the fan, stack, basin, sump and distribution data.
+- The builder runs under FreeCAD's own Python 3.11 through `freecadcmd`. It needs only the standard library and FreeCAD's modules (`Part`, `Import`), so it does not depend on the design environment. FreeCAD is found via `FREECADCMD`, standard install paths, or `PATH`.
+
+### Geometry
+- **FRP members:** each member is its true pultruded section (I/W outline or square tube with its hole), extruded along the member axis and placed with a direction-cosine matrix. Beams have their strong axis vertical.
+  - No booleans are used, so thousands of members build in seconds.
+  - Members run centre-to-centre between nodes; joint overlaps and the end trims of the cut lengths are not modelled.
+- **Other parts:**
+  - basin shell and pump sump bays (booleans)
+  - fill and eliminator blocks per cell
+  - risers, headers, laterals, nozzle stems and spray cones
+  - side and end casing, and plenum partitions
+  - fan deck with fan openings
+  - velocity-recovery stack shells
+  - fan hub and 8 blades, gear reducer, drive shaft, motor and mechanical support beam
+  - deck handrails and the ladder
+- **Organisation:** objects are grouped in `App::Part` containers by system: Basin, Structure, FillAndEliminators, Distribution, Casing, FanDeck, FanStacks, Mechanical and Access. These become the STEP assembly structure.
+  - By default there is one compound per member mark. `--per-member` creates one object per member instead.
+
+### Outputs
+| File | Content |
+|---|---|
+| `model/<tag>_tower.step` | STEP (AP214), for fabrication CAD such as Tekla, SolidWorks or Inventor |
+| `model/<tag>_tower.FCStd` | FreeCAD document |
+| `model/preview.png` | Preview rendered from a coarse tessellation |
+| `data/model_summary.json` | Build summary and checks |
+
+### Checks (automatic)
+- The STEP is re-imported in a fresh FreeCAD session and must be valid, with the same volume and bounding box as the built model.
+- Fill volume must equal plan area × depth.
+- The elevation extent must run from the sump slab underside to the stack top.
+- FRP framing mass from the solids must match the BOM within 5 %. It runs about +1 % because the model takes braces centre-to-centre.

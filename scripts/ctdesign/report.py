@@ -114,6 +114,27 @@ def structure_section(d: dict, b: Basis) -> list[str]:
     return L
 
 
+def model_section(d: dict, b: Basis) -> list[str]:
+    if "model" not in d:
+        return []
+    bt, st, ck = d["model"]["built"], d["model"]["step_check"], d["model"]["checks"]
+    tag = b.spec["project"]["tag"]
+    return ["### 3D model", "",
+            f"Built headlessly with FreeCAD {bt['freecad']} (`freecadcmd`) from the `model` block of "
+            f"`data/design_results.json`: {bt['members']} FRP members as true pultruded sections, basin and sump, fill, "
+            "eliminators, distribution, casing, fan deck, stacks, fans and drives, handrails and ladder. "
+            f"Files: `model/{tag}_tower.step`, `model/{tag}_tower.FCStd`.", "",
+            _t([("FRP framing mass, model vs BOM", f"{ck['frp_kg_model'] / 1e3:.2f} t vs {ck['frp_kg_bom'] / 1e3:.2f} t "
+                 "(model runs braces centre-to-centre)"),
+                ("Fill volume vs plan x depth", f"{ck['fill_volume_m3']:.1f} vs {ck['fill_volume_expected_m3']:.1f} m3"),
+                ("Elevation extent vs design", f"{ck['bbox_z_mm'][0] / 1e3:+.3f} .. {ck['bbox_z_mm'][1] / 1e3:+.3f} m vs "
+                 f"{ck['bbox_z_expected_mm'][0] / 1e3:+.3f} .. {ck['bbox_z_expected_mm'][1] / 1e3:+.3f} m"),
+                ("STEP re-import (fresh session)", f"{st['solids']} solids, valid {st['valid']}, "
+                 f"{st['volume_m3']:.2f} m3 vs {ck['model_volume_m3']:.2f} m3 built"),
+                ("Overall", "all checks passed" if ck["ok"] else "**CHECK FAILED**")], ["Check", "Result"]), "",
+            "![3D model](model/preview.png)", ""]
+
+
 def findings(d: dict, b: Basis) -> list[str]:
     th, fn, wb, air = d["thermal"]["selected"], d["fan"], d["water_balance"], d["air"]
     f = []
@@ -221,6 +242,7 @@ def write_report(d: dict, b: Basis, df: pd.DataFrame, path, files: dict):
               ("Blowdown (drift-corrected / Perry)", f"{wb['blowdown_m3_h']:.1f} / {wb['blowdown_perry_m3_h']:.1f} m3/h"),
               ("Makeup (drift-corrected / Perry)", f"{wb['makeup_m3_h']:.1f} / {wb['makeup_perry_m3_h']:.1f} m3/h")], ["Item", "Value"]), ""]
     L += structure_section(d, b)
+    L += model_section(d, b)
     L += ["## 8. Optimisation", ""]
     if len(df):
         ok = df[df.feasible.astype(bool)].nsmallest(10, "TPC")

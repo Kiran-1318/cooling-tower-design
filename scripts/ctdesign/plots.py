@@ -100,6 +100,38 @@ def structure_ur(st: dict, path):
     _save(fig, path)
 
 
+MODEL_COLOURS = {"Basin": ("#9e9e9e", 0.25), "Fill": ("#c8a165", 0.35), "Eliminators": ("#7fb3d5", 0.35),
+                 "Distribution": ("#c2185b", 0.9), "Casing": ("#90a4ae", 0.12), "FanDeck": ("#607d8b", 0.4),
+                 "FanStacks": ("#37474f", 0.35), "Mechanical": ("#ef6c00", 0.9), "Handrails": ("#fbc02d", 0.8)}
+
+
+def model_preview(mesh_json, path, elev=24, azim=-58):
+    """Isometric render of the FreeCAD model from its coarse tessellation (frame drawn as centrelines)."""
+    import json
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    data = json.loads(open(mesh_json, encoding="utf-8").read())
+    fig = plt.figure(figsize=(11, 7))
+    ax = fig.add_subplot(111, projection="3d")
+    lo, hi = np.full(3, np.inf), np.full(3, -np.inf)
+    for name, m in data.items():
+        if name.startswith("_") or not m["f"]:
+            continue
+        col, alpha = next((v for k, v in MODEL_COLOURS.items() if name.startswith(k)), ("#888888", 0.3))
+        v = np.asarray(m["v"], float)
+        f = np.asarray(m["f"], int)
+        ax.add_collection3d(Poly3DCollection(v[f], facecolor=col, edgecolor="none", alpha=alpha))
+        lo, hi = np.minimum(lo, v.min(0)), np.maximum(hi, v.max(0))
+    for p1, p2, mark in data.get("_members", []):
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], color="#1565c0" if mark != "BR1" else "#42a5f5", lw=0.5)
+    ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[1], hi[1]); ax.set_zlim(lo[2], hi[2])
+    ax.set_box_aspect(tuple(hi - lo))
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_axis_off()
+    ax.set_title("FreeCAD model (preview of the STEP/FCStd)")
+    fig.savefig(path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
 def poppe_profile(t: dict, P: float, path):
     pr = t["selected"]["_poppe_profile"]                 # Tw, w, ima, Me, Ta, sat, Lef
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 4))

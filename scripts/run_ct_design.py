@@ -25,10 +25,10 @@ from ctdesign import spec as specmod                                  # noqa: E4
 import pandas as pd
 
 from ctdesign import thermal_design, plots, sizing, report, structure, bom   # noqa: E402
-from ctdesign import drawings_dxf                                          # noqa: E402
+from ctdesign import drawings_dxf, model3d                                 # noqa: E402
 
 STAGES = ["basis", "thermal", "size", "structure", "drawings", "model", "report"]
-IMPLEMENTED = {"basis", "thermal", "size", "structure", "drawings", "report"}
+IMPLEMENTED = {"basis", "thermal", "size", "structure", "drawings", "model", "report"}
 
 
 def _jsonable(o):
@@ -170,6 +170,31 @@ def stage_drawings(b: specmod.Basis, out: Path, d: dict | None) -> dict:
     return d
 
 
+def stage_model(b: specmod.Basis, out: Path, d: dict | None, per_member: bool = False) -> dict:
+    """Write the model block into design_results.json and build the FreeCAD model headlessly."""
+    if d is None or "structure" not in d:
+        d = stage_structure(b, out, d or _reload(b, out))
+    res_path = out / "data" / "design_results.json"
+    res = json.loads(res_path.read_text(encoding="utf-8"))
+    res["model"] = model3d.model_input(d, b)
+    res_path.write_text(json.dumps(_jsonable(res), indent=1), encoding="utf-8")
+    fc = model3d.find_freecadcmd(b.spec)
+    if fc is None:
+        print("[model] freecadcmd not found - model data written to design_results.json; install FreeCAD or set "
+              "FREECADCMD, then rerun --stage model")
+        return d
+    built = model3d.build(res_path, out / "model", fc, per_member)
+    step = model3d.check_step(Path(built["step"]), fc)
+    chk = model3d.checks(res["model"], built, step)
+    plots.model_preview(out / "model" / "preview_mesh.json", out / "model" / "preview.png")
+    d["model"] = {"built": built, "step_check": step, "checks": chk}
+    (out / "data" / "model_summary.json").write_text(json.dumps(_jsonable(d["model"]), indent=2), encoding="utf-8")
+    print(f"[model] FreeCAD {built['freecad']}: {built['members']} members, {step['solids']} solids in STEP, "
+          f"{built['seconds']:.0f} s; FRP {built['frp_kg_model'] / 1e3:.2f} t (BOM {chk['frp_kg_bom'] / 1e3:.2f} t); "
+          f"checks {'OK' if chk['ok'] else 'FAILED'}")
+    return d
+
+
 def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
     if d is None:                                         # report-only run: rebuild from the saved selection
         d = _reload(b, out)
@@ -187,6 +212,10 @@ def stage_report(b: specmod.Basis, out: Path, d: dict | None) -> None:
         files[rel.replace(".dxf", ".dxf / .svg / .pdf")] = f"{sh['number']} {sh['title'].title()} ({sh['scale']})"
     if d.get("drawings"):
         files[f"drawings/{tag}_drawing_set.pdf"] = "Complete drawing set (PDF, A1)"
+    if d.get("model"):
+        files.update({f"model/{tag}_tower.step": "3D model, STEP AP214 (for fabrication CAD)",
+                      f"model/{tag}_tower.FCStd": "3D model, FreeCAD document", "model/preview.png": "Model preview",
+                      "data/model_summary.json": "Model build and STEP re-import checks"})
     if "structure" in d:
         files.update({f"data/{tag}_BOM.xlsx": "Fabrication BOM, member groups, connections (Excel)",
                       f"data/{tag}_BOM.csv": "Fabrication BOM (CSV)", "data/structure.json": "Structural results",
@@ -203,6 +232,8 @@ def main(argv=None):
     ap.add_argument("--stage", choices=["all"] + STAGES, default="all")
     ap.add_argument("--quick", action="store_true", help="smaller grid for a fast first pass")
     ap.add_argument("--params", default=None, help="JSON geometry to use instead of the optimum")
+    ap.add_argument("--per-member", action="store_true",
+                    help="3D model: one FreeCAD object per FRP member (default: one compound per member mark)")
     a = ap.parse_args(argv)
 
     out = Path(a.out)
@@ -226,6 +257,8 @@ def main(argv=None):
             d = stage_structure(b, out, d)
         elif st == "drawings":
             d = stage_drawings(b, out, d)
+        elif st == "model":
+            d = stage_model(b, out, d, a.per_member)
         elif st == "report":
             stage_report(b, out, d)
 
